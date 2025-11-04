@@ -1,0 +1,344 @@
+import React, { useState, useEffect } from 'react';
+import { MessageSquare, Send, Shuffle, ThumbsUp, Flame } from 'lucide-react';
+
+export default function PenguinConfessions() {
+  const [confessions, setConfessions] = useState([]);
+  const [currentConfession, setCurrentConfession] = useState(null);
+  const [newConfession, setNewConfession] = useState('');
+  const [view, setView] = useState('random');
+  const [isLoading, setIsLoading] = useState(true);
+  const [showTroll, setShowTroll] = useState(false);
+  const [trollPosition, setTrollPosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    loadConfessions();
+  }, []);
+
+  const loadConfessions = async () => {
+    try {
+      const keys = await window.storage.list('confession:', true);
+      if (keys && keys.keys.length > 0) {
+        const loadedConfessions = await Promise.all(
+          keys.keys.map(async (key) => {
+            try {
+              const result = await window.storage.get(key, true);
+              return result ? JSON.parse(result.value) : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        const validConfessions = loadedConfessions.filter(c => c !== null);
+        setConfessions(validConfessions);
+        if (validConfessions.length > 0) {
+          setCurrentConfession(validConfessions[Math.floor(Math.random() * validConfessions.length)]);
+        }
+      } else {
+        // Add starter confessions
+        const starters = [
+          { id: Date.now() + 1, text: "I secretly think Linux users are just masochists who enjoy pain", likes: 42, timestamp: Date.now() },
+          { id: Date.now() + 2, text: "I write code without tests and sleep perfectly fine at night", likes: 156, timestamp: Date.now() - 100000 },
+          { id: Date.now() + 3, text: "I use light mode in my IDE. Fight me.", likes: 89, timestamp: Date.now() - 200000 },
+          { id: Date.now() + 4, text: "Stack Overflow copy-paste is a valid programming strategy", likes: 234, timestamp: Date.now() - 300000 },
+          { id: Date.now() + 5, text: "I've been saying 'I'll refactor this later' for 3 years", likes: 178, timestamp: Date.now() - 400000 }
+        ];
+        
+        for (const starter of starters) {
+          await window.storage.set(`confession:${starter.id}`, JSON.stringify(starter), true);
+        }
+        setConfessions(starters);
+        setCurrentConfession(starters[0]);
+      }
+    } catch (error) {
+      console.error('Error loading confessions:', error);
+      setConfessions([]);
+    }
+    setIsLoading(false);
+  };
+
+  const getRandomConfession = () => {
+    if (confessions.length > 0) {
+      const random = confessions[Math.floor(Math.random() * confessions.length)];
+      setCurrentConfession(random);
+      triggerTroll();
+    }
+  };
+
+  const submitConfession = async () => {
+    if (newConfession.trim().length < 10) {
+      alert('Confession too short! Make it juicy! (at least 10 characters)');
+      return;
+    }
+
+    const confession = {
+      id: Date.now(),
+      text: newConfession.trim(),
+      likes: 0,
+      timestamp: Date.now()
+    };
+
+    try {
+      await window.storage.set(`confession:${confession.id}`, JSON.stringify(confession), true);
+      setConfessions(prev => [confession, ...prev]);
+      setNewConfession('');
+      setView('feed');
+      triggerTroll();
+      alert('🐧 Confession submitted! The trolls are pleased.');
+    } catch (error) {
+      console.error('Error submitting confession:', error);
+      alert('Failed to submit confession. Try again!');
+    }
+  };
+
+  const likeConfession = async (id) => {
+    const confession = confessions.find(c => c.id === id);
+    if (!confession) return;
+
+    const updated = { ...confession, likes: confession.likes + 1 };
+    
+    try {
+      await window.storage.set(`confession:${id}`, JSON.stringify(updated), true);
+      setConfessions(prev => prev.map(c => c.id === id ? updated : c));
+      if (currentConfession && currentConfession.id === id) {
+        setCurrentConfession(updated);
+      }
+    } catch (error) {
+      console.error('Error liking confession:', error);
+    }
+  };
+
+  const triggerTroll = () => {
+    setTrollPosition({
+      x: Math.random() * 80,
+      y: Math.random() * 80
+    });
+    setShowTroll(true);
+    setTimeout(() => setShowTroll(false), 2000);
+  };
+
+  const sortedConfessions = [...confessions].sort((a, b) => b.timestamp - a.timestamp);
+  const topConfessions = [...confessions].sort((a, b) => b.likes - a.likes).slice(0, 10);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-900 via-green-700 to-green-900 text-white p-4 relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-20 left-10 text-9xl animate-pulse">🐧</div>
+        <div className="absolute bottom-20 right-10 text-9xl animate-bounce">😈</div>
+        <div className="absolute top-40 right-20 text-7xl animate-spin-slow">🎭</div>
+      </div>
+
+      {/* Troll Popup */}
+      {showTroll && (
+        <div 
+          className="fixed z-50 text-9xl animate-ping"
+          style={{ 
+            left: `${trollPosition.x}%`, 
+            top: `${trollPosition.y}%`,
+            transition: 'all 0.3s ease'
+          }}
+        >
+          🐧
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="max-w-4xl mx-auto relative z-10">
+        <div className="text-center mb-8 animate-bounce">
+          <div className="text-8xl mb-4">🐧</div>
+          <h1 className="text-5xl font-bold mb-2 text-green-300 drop-shadow-lg">
+            Penguin Confessions
+          </h1>
+          <p className="text-xl text-green-200">Where trolls confess their darkest secrets</p>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex gap-2 mb-6 bg-black bg-opacity-30 p-2 rounded-lg backdrop-blur">
+          <button
+            onClick={() => setView('random')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+              view === 'random' 
+                ? 'bg-green-500 text-white scale-105' 
+                : 'bg-green-800 bg-opacity-50 hover:bg-green-700'
+            }`}
+          >
+            <Shuffle size={20} /> Random
+          </button>
+          <button
+            onClick={() => setView('confess')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+              view === 'confess' 
+                ? 'bg-green-500 text-white scale-105' 
+                : 'bg-green-800 bg-opacity-50 hover:bg-green-700'
+            }`}
+          >
+            <Send size={20} /> Confess
+          </button>
+          <button
+            onClick={() => setView('feed')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+              view === 'feed' 
+                ? 'bg-green-500 text-white scale-105' 
+                : 'bg-green-800 bg-opacity-50 hover:bg-green-700'
+            }`}
+          >
+            <MessageSquare size={20} /> Feed
+          </button>
+          <button
+            onClick={() => setView('top')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+              view === 'top' 
+                ? 'bg-green-500 text-white scale-105' 
+                : 'bg-green-800 bg-opacity-50 hover:bg-green-700'
+            }`}
+          >
+            <Flame size={20} /> Top
+          </button>
+        </div>
+
+        {/* Content Area */}
+        <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border-4 border-green-400">
+          {isLoading ? (
+            <div className="text-center py-20">
+              <div className="text-6xl animate-spin mb-4">🐧</div>
+              <p className="text-2xl">Loading confessions...</p>
+            </div>
+          ) : (
+            <>
+              {/* Random View */}
+              {view === 'random' && (
+                <div className="space-y-6">
+                  {currentConfession ? (
+                    <div className="bg-black bg-opacity-30 p-6 rounded-xl border-2 border-green-400">
+                      <p className="text-2xl mb-4 leading-relaxed">{currentConfession.text}</p>
+                      <div className="flex justify-between items-center">
+                        <button
+                          onClick={() => likeConfession(currentConfession.id)}
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg transition-all"
+                        >
+                          <ThumbsUp size={20} /> {currentConfession.likes}
+                        </button>
+                        <span className="text-green-300 text-sm">
+                          {new Date(currentConfession.timestamp).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-center text-xl py-10">No confessions yet! Be the first troll!</p>
+                  )}
+                  <button
+                    onClick={getRandomConfession}
+                    className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 py-4 rounded-xl font-bold text-xl transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                  >
+                    <Shuffle size={24} /> Get Random Confession
+                  </button>
+                </div>
+              )}
+
+              {/* Confess View */}
+              {view === 'confess' && (
+                <div className="space-y-4">
+                  <div className="text-center mb-6">
+                    <p className="text-2xl mb-2">🤫 Anonymous Confession Time</p>
+                    <p className="text-green-300">Share your deepest, darkest tech sins...</p>
+                  </div>
+                  <textarea
+                    value={newConfession}
+                    onChange={(e) => setNewConfession(e.target.value)}
+                    placeholder="I once pushed directly to main and blamed it on an intern..."
+                    className="w-full h-48 p-4 rounded-xl bg-black bg-opacity-50 border-2 border-green-400 text-white placeholder-green-300 text-lg resize-none focus:outline-none focus:border-green-300"
+                    maxLength={500}
+                  />
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-300">{newConfession.length}/500</span>
+                    <button
+                      onClick={submitConfession}
+                      className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 px-8 py-3 rounded-xl font-bold text-xl transition-all transform hover:scale-105 flex items-center gap-2"
+                    >
+                      <Send size={20} /> Confess Anonymously
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Feed View */}
+              {view === 'feed' && (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <h2 className="text-2xl font-bold mb-4 sticky top-0 bg-green-800 bg-opacity-80 p-2 rounded">
+                    📜 Latest Confessions ({sortedConfessions.length})
+                  </h2>
+                  {sortedConfessions.length === 0 ? (
+                    <p className="text-center py-10">No confessions yet!</p>
+                  ) : (
+                    sortedConfessions.map((confession) => (
+                      <div
+                        key={confession.id}
+                        className="bg-black bg-opacity-30 p-4 rounded-lg border border-green-400 hover:border-green-300 transition-all"
+                      >
+                        <p className="mb-3 text-lg">{confession.text}</p>
+                        <div className="flex justify-between items-center text-sm">
+                          <button
+                            onClick={() => likeConfession(confession.id)}
+                            className="flex items-center gap-2 bg-green-700 hover:bg-green-600 px-3 py-1 rounded transition-all"
+                          >
+                            <ThumbsUp size={16} /> {confession.likes}
+                          </button>
+                          <span className="text-green-300">
+                            {new Date(confession.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* Top View */}
+              {view === 'top' && (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <h2 className="text-2xl font-bold mb-4 sticky top-0 bg-green-800 bg-opacity-80 p-2 rounded flex items-center gap-2">
+                    <Flame className="text-orange-400" /> Top 10 Confessions
+                  </h2>
+                  {topConfessions.length === 0 ? (
+                    <p className="text-center py-10">No confessions yet!</p>
+                  ) : (
+                    topConfessions.map((confession, index) => (
+                      <div
+                        key={confession.id}
+                        className="bg-black bg-opacity-30 p-4 rounded-lg border-2 border-orange-400 hover:border-orange-300 transition-all"
+                      >
+                        <div className="flex gap-3">
+                          <div className="text-3xl font-bold text-orange-400">#{index + 1}</div>
+                          <div className="flex-1">
+                            <p className="mb-3 text-lg">{confession.text}</p>
+                            <div className="flex justify-between items-center text-sm">
+                              <button
+                                onClick={() => likeConfession(confession.id)}
+                                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 px-3 py-1 rounded transition-all"
+                              >
+                                <ThumbsUp size={16} /> {confession.likes}
+                              </button>
+                              <span className="text-green-300">
+                                {new Date(confession.timestamp).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-6 text-green-300">
+          <p className="text-sm">🐧 All confessions are anonymous and shared with everyone</p>
+          <p className="text-xs mt-2 opacity-75">Built with trolling and chaos in mind</p>
+        </div>
+      </div>
+    </div>
+  );
+}
